@@ -1,0 +1,9 @@
+crates/target
+/target
+.env
+data
+qdrant_storage/
+teas_data.json
+test_teas*.json
+cache.json
+benchmark_results.json

@@ -1,0 +1,59 @@
+[workspace]
+members = [
+    "chai-core",
+    "chai-cli",
+    "chai-web",
+]
+resolver = "2"
+
+[workspace.dependencies]
+# Core dependencies
+anyhow = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.49", features = ["full"] }
+reqwest = { version = "0.13", features = ["json"] }
+
+# Database & Vector search
+qdrant-client = "1.16"
+
+# Crypto & utilities
+sha2 = "0.10"
+uuid = { version = "1.19", features = ["v4", "v5", "serde", "js"] }
+regex = "1.12"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = "0.3"
+
+# Config
+dotenvy = "0.15"
+
+# CLI
+clap = { version = "4.5", features = ["derive"] }
+
+# Web scraping
+scraper = "0.25"
+
+# Leptos (for web UI)
+leptos = "0.8"
+leptos_meta = "0.8"
+leptos_router = "0.8"
+leptos_axum = "0.8"
+
+# Axum
+axum = "0.8"
+tower = "0.5"
+tower-http = { version = "0.6", features = ["fs", "cors"] }
+
+# Other
+thiserror = "2"
+console_error_panic_hook = "0.1"
+wasm-bindgen = "0.2"
+web-sys = "0.3"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true

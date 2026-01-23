@@ -1,0 +1,86 @@
+[package]
+name = "chai-web"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[[bin]]
+name = "chai-web"
+path = "src/main.rs"
+required-features = ["ssr"]
+
+[dependencies]
+# Workspace dependencies - models only for client, full for server
+chai-core = { path = "../chai-core", default-features = false }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+anyhow = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+tracing-subscriber = { workspace = true, optional = true }
+dotenvy = { workspace = true, optional = true }
+
+# Leptos
+leptos = { workspace = true }
+leptos_meta = { workspace = true }
+leptos_router = { workspace = true }
+leptos_axum = { workspace = true, optional = true }
+
+# Axum
+axum = { workspace = true, optional = true }
+tower = { workspace = true, optional = true }
+tower-http = { workspace = true, optional = true }
+
+# WASM dependencies
+thiserror = { workspace = true }
+console_error_panic_hook = { workspace = true }
+wasm-bindgen = { workspace = true }
+web-sys = { workspace = true, features = [
+    "Window",
+    "Storage",
+    "MediaQueryList",
+] }
+axum-governor = { version = "1.0.3", optional = true }
+lazy-limit = { version = "1.0.3", optional = true }
+real = { version = "0.1.4", features = ["axum"], optional = true }
+
+[features]
+default = []
+hydrate = ["leptos/hydrate"]
+ssr = [
+    "leptos/ssr",
+    "leptos_meta/ssr",
+    "leptos_router/ssr",
+    "dep:leptos_axum",
+    "dep:axum",
+    "dep:tower",
+    "dep:tower-http",
+    "dep:tokio",
+    "dep:reqwest",
+    "dep:dotenvy",
+    "dep:anyhow",
+    "dep:tracing",
+    "dep:tracing-subscriber",
+    "dep:axum-governor",
+    "dep:lazy-limit",
+    "dep:real",
+    "chai-core/server",
+]
+
+[package.metadata.leptos]
+output-name = "chai-web"
+site-root = "../../target/site"
+site-pkg-dir = "pkg"
+style-file = "style/main.css"
+assets-dir = "public"
+site-addr = "127.0.0.1:3000"
+reload-port = 3001
+browserquery = "defaults"
+env = "DEV"
+bin-features = ["ssr"]
+bin-default-features = false
+lib-features = ["hydrate"]
+lib-default-features = false

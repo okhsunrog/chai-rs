@@ -1,0 +1,46 @@
+[package]
+name = "chai-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+# Always available (models + uuid for consistent ID generation)
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+
+# Server-only dependencies
+anyhow = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+qdrant-client = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
+tracing = { workspace = true, optional = true }
+dotenvy = { workspace = true, optional = true }
+regex = { workspace = true, optional = true }
+scraper = { workspace = true, optional = true }
+futures = { version = "0.3.31", optional = true }
+sqlx = { version = "0.8.6", default-features = false, features = ["runtime-tokio", "sqlite", "macros"], optional = true }
+# Note: pulls in rsa crate (RUSTSEC-2023-0071) but we only use HS256/HMAC, not RSA algorithms
+jsonwebtoken = { version = "10.2.0", features = ["rust_crypto"], optional = true }
+argon2 = { version = "0.5.3", optional = true }
+rand = { version = "0.9", optional = true }
+
+[features]
+default = ["server"]
+server = [
+    "dep:anyhow",
+    "dep:tokio",
+    "dep:reqwest",
+    "dep:qdrant-client",
+    "dep:sha2",
+    "dep:tracing",
+    "dep:dotenvy",
+    "dep:regex",
+    "dep:scraper",
+    "dep:futures",
+    "dep:sqlx",
+    "dep:jsonwebtoken",
+    "dep:argon2",
+    "dep:rand",
+]

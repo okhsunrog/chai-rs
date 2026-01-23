@@ -1,0 +1,22 @@
+[Unit]
+Description=Chai Tea Discovery
+After=network.target qdrant-chai.service
+Requires=qdrant-chai.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/chai
+ExecStart=/opt/chai/chai-web
+Environment=LEPTOS_SITE_ADDR=0.0.0.0:3031
+Environment=LEPTOS_SITE_ROOT=site
+Environment=SQLITE_DATABASE_PATH=/opt/chai/data/chai.db
+Environment=QDRANT_URL=http://127.0.0.1:6334
+Environment=QDRANT_COLLECTION=teas
+Environment=VECTOR_SIZE=4096
+EnvironmentFile=/opt/chai/.env
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
