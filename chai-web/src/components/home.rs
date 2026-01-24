@@ -68,6 +68,28 @@ pub fn Home() -> impl IntoView {
     let (loading, set_loading) = signal(false);
     let (error, set_error) = signal(Option::<String>::None);
 
+    // Auto-dismiss toast after 8 seconds
+    Effect::new(move |_| {
+        if error.get().is_some() {
+            #[cfg(target_arch = "wasm32")]
+            {
+                use wasm_bindgen::JsCast;
+                use wasm_bindgen::closure::Closure;
+
+                let window = web_sys::window().unwrap();
+                let set_error = set_error.clone();
+                let closure = Closure::once(move || {
+                    set_error.set(None);
+                });
+                let _ = window.set_timeout_with_callback_and_timeout_and_arguments_0(
+                    closure.as_ref().unchecked_ref(),
+                    8000,
+                );
+                closure.forget(); // Prevent closure from being dropped
+            }
+        }
+    });
+
     // Загружаем количество чаёв из БД
     let teas_count = Resource::new(|| (), |_| async { get_teas_count().await });
 
@@ -210,12 +232,19 @@ pub fn Home() -> impl IntoView {
                 None
             }}
 
-            // Ошибки
-            {move || error.get().map(|err| view! {
-                <div class="error-message">
-                    <span class="icon">"⚠️"</span>
-                    <span>{err}</span>
-                </div>
+            // Toast-уведомление об ошибке (фиксированное сверху)
+            {move || error.get().map(|err| {
+                let is_injection = err.contains("Хорошая попытка");
+                let icon = if is_injection { "🫖" } else { "⚠️" };
+                let class = if is_injection { "toast toast-warning" } else { "toast toast-error" };
+
+                view! {
+                    <div class=class on:click=move |_| set_error.set(None)>
+                        <span class="toast-icon">{icon}</span>
+                        <span class="toast-message">{err}</span>
+                        <span class="toast-close">"✕"</span>
+                    </div>
+                }
             })}
 
             // Результаты
