@@ -7,13 +7,24 @@ DEPLOY_DIR="/opt/chai"
 echo "=== Building chai-rs for release ==="
 cd "$(dirname "$0")/.."
 
+# Clean old site files to force rebuild
+rm -rf target/site/pkg
+
 # Build release binary (from chai-web directory where Cargo.toml with leptos config is)
 cd chai-web
+# Touch source files to force frontend rebuild
+touch src/lib.rs style/main.css
 cargo leptos build --release
 cd ..
 
 echo ""
 echo "=== Preparing deployment package ==="
+
+# Verify build artifacts exist
+if [ ! -f "target/site/pkg/chai-web.js" ]; then
+    echo "ERROR: Frontend build failed - target/site/pkg/chai-web.js not found"
+    exit 1
+fi
 
 # Create temp dir with deployment files
 TEMP_DIR=$(mktemp -d)
@@ -24,6 +35,10 @@ cp target/release/chai-web "$TEMP_DIR/"
 
 # Copy site directory (CSS, JS, WASM)
 cp -r target/site "$TEMP_DIR/site"
+
+# Show what we're deploying
+echo "Frontend files:"
+ls -la target/site/pkg/
 
 echo "Binary size: $(du -h target/release/chai-web | cut -f1)"
 echo "Site size: $(du -sh target/site | cut -f1)"
