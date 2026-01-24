@@ -185,6 +185,9 @@ async fn analyze_query(user_query: &str, api_key: &str) -> Result<QueryAnalysis>
     let content = call_llm(api_key, &prompt, MAX_ANALYSIS_TOKENS).await?;
     let cleaned = strip_markdown_json(&content);
 
+    // Log raw LLM response for debugging
+    info!(raw_json = %cleaned, "Query analysis response");
+
     serde_json::from_str(cleaned)
         .with_context(|| format!("Failed to parse query analysis: {}", cleaned))
 }

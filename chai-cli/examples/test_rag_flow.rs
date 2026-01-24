@@ -5,6 +5,11 @@ use chai_core::{Config, ai};
 async fn main() -> Result<()> {
     dotenvy::dotenv().ok();
 
+    // Initialize tracing (shows INFO level by default)
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::INFO)
+        .init();
+
     let api_key = std::env::var("OPENROUTER_API_KEY")?;
     let config = Config::from_env()?;
 
