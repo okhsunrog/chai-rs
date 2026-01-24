@@ -357,8 +357,18 @@ pub async fn chat_completion(
 
     // Parse LLM response
     let cleaned_content = strip_markdown_json(&content);
-    let llm_response: LLMResponse = serde_json::from_str(cleaned_content)
-        .with_context(|| format!("Failed to parse LLM response as JSON: {}", cleaned_content))?;
+    let llm_response: LLMResponse = match serde_json::from_str(cleaned_content) {
+        Ok(resp) => resp,
+        Err(e) => {
+            // Log full error for debugging, but don't expose to user
+            warn!(
+                error = %e,
+                raw_response = %cleaned_content,
+                "Failed to parse LLM response"
+            );
+            anyhow::bail!("Не удалось обработать ответ. Попробуйте переформулировать запрос.");
+        }
+    };
 
     // Build tea cards from LLM selection
     let mut tea_cards = Vec::new();
