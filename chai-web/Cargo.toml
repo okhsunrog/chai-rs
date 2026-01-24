@@ -47,6 +47,9 @@ axum-governor = { version = "1.0.3", optional = true }
 lazy-limit = { version = "1.0.3", optional = true }
 real = { version = "0.1.4", features = ["axum"], optional = true }
 
+[build-dependencies]
+chrono = "0.4"
+
 [features]
 default = []
 hydrate = ["leptos/hydrate"]

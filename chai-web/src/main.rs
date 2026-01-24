@@ -1,7 +1,15 @@
 #[cfg(feature = "ssr")]
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+#[cfg(feature = "ssr")]
+pub const GIT_HASH: &str = env!("GIT_HASH");
+#[cfg(feature = "ssr")]
+pub const BUILD_TIME: &str = env!("BUILD_TIME");
+
+#[cfg(feature = "ssr")]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    use axum::Router;
+    use axum::{Router, routing::get};
+    use axum::response::Json;
     use axum_governor::GovernorLayer;
     use chai_core::db::{self, DbConfig};
     use chai_web::app::App;
@@ -9,6 +17,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     use leptos::prelude::*;
     use leptos_axum::{LeptosRoutes, generate_route_list};
     use real::RealIpLayer;
+    use serde_json::json;
     use std::net::SocketAddr;
     use tower_http::cors::{AllowOrigin, CorsLayer};
     use tower_http::services::ServeDir;
@@ -22,7 +31,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .with_level(true)
         .init();
 
-    tracing::info!("Starting Tea Advisor server...");
+    tracing::info!(
+        "Starting Tea Advisor v{}-{} (built {})",
+        VERSION, GIT_HASH, BUILD_TIME
+    );
 
     // Validate required environment variables
     if std::env::var("JWT_SECRET").is_err() {
@@ -53,8 +65,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let leptos_options = conf.leptos_options;
     let routes = generate_route_list(App);
 
+    // Version endpoint handler
+    async fn version_handler() -> Json<serde_json::Value> {
+        Json(json!({
+            "version": VERSION,
+            "git_hash": GIT_HASH,
+            "build_time": BUILD_TIME
+        }))
+    }
+
     // Build Axum router with rate limiting
     let app = Router::new()
+        .route("/api/version", get(version_handler))
         .leptos_routes(&leptos_options, routes, {
             let leptos_options = leptos_options.clone();
             move || {

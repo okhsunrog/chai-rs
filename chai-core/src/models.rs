@@ -142,6 +142,9 @@ pub struct LLMResponse {
     /// Short descriptions for each tea (1-2 sentences)
     #[serde(default)]
     pub descriptions: std::collections::HashMap<String, String>,
+    /// Prompt injection detected in Stage 3 (backup detection)
+    #[serde(default)]
+    pub is_prompt_injection: bool,
 }
 
 /// Ответ от AI с рекомендациями (после обогащения данными)
