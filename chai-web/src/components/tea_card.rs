@@ -1,6 +1,14 @@
 use crate::models::TeaCard as TeaCardModel;
 use leptos::prelude::*;
 
+/// Format price string: "580.0000" -> "580 ₽"
+fn format_price(price: &str) -> String {
+    price
+        .parse::<f64>()
+        .map(|p| format!("{} ₽", p.round() as i64))
+        .unwrap_or_else(|_| format!("{} ₽", price))
+}
+
 #[component]
 pub fn TeaCard(card: TeaCardModel) -> impl IntoView {
     let (show_modal, set_show_modal) = signal(false);
@@ -116,7 +124,7 @@ pub fn TeaCard(card: TeaCardModel) -> impl IntoView {
 
                 // Цена
                 {price.clone().map(|p| {
-                    let price_text = p.clone();
+                    let price_text = format_price(&p);
                     view! {
                         <div class="card-price">
                             <span class="price-label">"Цена: "</span>
@@ -249,7 +257,7 @@ pub fn TeaCard(card: TeaCardModel) -> impl IntoView {
                                                     key=|v| format!("{}-{}", v.packaging, v.price)
                                                     children=move |variant| {
                                                         let packaging = variant.packaging.clone();
-                                                        let price_val = variant.price.clone();
+                                                        let price_val = format_price(&variant.price);
                                                         let quantity = variant.quantity.clone();
                                                         view! {
                                                             <div class="price-variant-item">
@@ -265,12 +273,15 @@ pub fn TeaCard(card: TeaCardModel) -> impl IntoView {
                                             </div>
                                         </div>
                                     }.into_any())
-                                } else { price.clone().map(|p| view! {
-                                        <div class="modal-section modal-simple-price">
-                                            <h3>"💰 Цена"</h3>
-                                            <div class="simple-price">{p}</div>
-                                        </div>
-                                    }.into_any()) }}
+                                } else { price.clone().map(|p| {
+                                        let formatted = format_price(&p);
+                                        view! {
+                                            <div class="modal-section modal-simple-price">
+                                                <h3>"💰 Цена"</h3>
+                                                <div class="simple-price">{formatted}</div>
+                                            </div>
+                                        }.into_any()
+                                    }) }}
 
                                 // Кнопки действий (ВСЕГДА видны)
                                 <div class="modal-actions">
