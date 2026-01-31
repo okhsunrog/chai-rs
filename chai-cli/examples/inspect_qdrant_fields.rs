@@ -1,12 +1,22 @@
 use anyhow::Result;
-use chai_core::{Config, qdrant};
+use chai_core::{DbConfig, embeddings, turso};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenvy::dotenv().ok();
-    let config = Config::from_env()?;
 
-    let results = qdrant::search_teas("облепиха", 3, &config).await?;
+    // Initialize database
+    let db_config = DbConfig::from_env();
+    turso::init_database(&db_config).await?;
+
+    // Create embedding for search query
+    let embeddings_config = embeddings::EmbeddingsConfig::from_env()?;
+    let embeddings_client = embeddings::EmbeddingsClient::new(embeddings_config)?;
+    let query_embedding = embeddings_client
+        .create_embedding("облепиха".to_string())
+        .await?;
+
+    let results = turso::search_teas(&query_embedding, 3, &turso::SearchFilters::default()).await?;
 
     for (i, result) in results.iter().enumerate() {
         let tea = &result.tea;

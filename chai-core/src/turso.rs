@@ -7,6 +7,7 @@
 //! - Tea storage with vector embeddings for semantic search
 
 use anyhow::{Context, Result};
+use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tokio::sync::OnceCell;
 use tracing::info;
@@ -31,8 +32,16 @@ pub struct DbConfig {
 
 impl DbConfig {
     /// Load config from environment variables
+    ///
+    /// Environment variables:
+    /// - `DATABASE_PATH`: Path to the database file (default: "data/chai.db")
+    /// - `SQLITE_DATABASE_PATH`: Legacy alias for DATABASE_PATH (for backward compatibility)
+    /// - `VECTOR_SIZE`: Embedding vector dimension (default: 4096)
     pub fn from_env() -> Self {
-        let path = std::env::var("DATABASE_PATH").unwrap_or_else(|_| "data/chai.db".to_string());
+        // Support both DATABASE_PATH and legacy SQLITE_DATABASE_PATH for backward compatibility
+        let path = std::env::var("DATABASE_PATH")
+            .or_else(|_| std::env::var("SQLITE_DATABASE_PATH"))
+            .unwrap_or_else(|_| "data/chai.db".to_string());
         let vector_size = std::env::var("VECTOR_SIZE")
             .ok()
             .and_then(|s| s.parse().ok())
@@ -119,12 +128,9 @@ pub async fn init_database(config: &DbConfig) -> Result<()> {
     .context("Failed to create teas table")?;
 
     // Create indexes for common queries
-    conn.execute(
-        "CREATE INDEX IF NOT EXISTS idx_teas_url ON teas(url)",
-        (),
-    )
-    .await
-    .context("Failed to create teas url index")?;
+    conn.execute("CREATE INDEX IF NOT EXISTS idx_teas_url ON teas(url)", ())
+        .await
+        .context("Failed to create teas url index")?;
 
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_teas_in_stock ON teas(in_stock)",
@@ -168,10 +174,12 @@ pub fn is_initialized() -> bool {
 // ============================================================================
 
 /// User model
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
     pub id: i64,
     pub email: String,
+    /// Password hash - excluded from serialization for security
+    #[serde(skip_serializing)]
     pub password_hash: String,
     pub created_at: i64,
 }
@@ -305,10 +313,7 @@ pub async fn cache_contains(url: &str) -> Result<bool> {
     let conn = get_connection()?;
 
     let mut rows = conn
-        .query(
-            "SELECT 1 FROM html_cache WHERE url = ? LIMIT 1",
-            [url],
-        )
+        .query("SELECT 1 FROM html_cache WHERE url = ? LIMIT 1", [url])
         .await
         .context("Failed to check cache")?;
 
@@ -345,32 +350,42 @@ pub struct CacheStats {
 pub async fn cache_stats() -> Result<CacheStats> {
     let conn = get_connection()?;
 
+    // Single query for all stats - more efficient than 4 separate queries
     let mut rows = conn
-        .query("SELECT COUNT(*) FROM html_cache", ())
-        .await?;
-    let count: i64 = rows.next().await?.map(|r| r.get(0)).transpose()?.unwrap_or(0);
+        .query(
+            r#"
+            SELECT
+                COUNT(*) as count,
+                COALESCE(SUM(LENGTH(html)), 0) as total_size,
+                MIN(fetched_at) as oldest,
+                MAX(fetched_at) as newest
+            FROM html_cache
+            "#,
+            (),
+        )
+        .await
+        .context("Failed to query cache stats")?;
 
-    let mut rows = conn
-        .query("SELECT COALESCE(SUM(LENGTH(html)), 0) FROM html_cache", ())
-        .await?;
-    let total_size: i64 = rows.next().await?.map(|r| r.get(0)).transpose()?.unwrap_or(0);
+    if let Some(row) = rows.next().await? {
+        let count: i64 = row.get(0)?;
+        let total_size: i64 = row.get(1)?;
+        let oldest: Option<i64> = row.get::<Option<i64>>(2).ok().flatten();
+        let newest: Option<i64> = row.get::<Option<i64>>(3).ok().flatten();
 
-    let mut rows = conn
-        .query("SELECT MIN(fetched_at) FROM html_cache", ())
-        .await?;
-    let oldest: Option<i64> = rows.next().await?.and_then(|r| r.get(0).ok());
-
-    let mut rows = conn
-        .query("SELECT MAX(fetched_at) FROM html_cache", ())
-        .await?;
-    let newest: Option<i64> = rows.next().await?.and_then(|r| r.get(0).ok());
-
-    Ok(CacheStats {
-        entry_count: count as usize,
-        total_size_bytes: total_size as usize,
-        oldest_entry: oldest.filter(|&t| t > 0),
-        newest_entry: newest.filter(|&t| t > 0),
-    })
+        Ok(CacheStats {
+            entry_count: count as usize,
+            total_size_bytes: total_size as usize,
+            oldest_entry: oldest.filter(|&t| t > 0),
+            newest_entry: newest.filter(|&t| t > 0),
+        })
+    } else {
+        Ok(CacheStats {
+            entry_count: 0,
+            total_size_bytes: 0,
+            oldest_entry: None,
+            newest_entry: None,
+        })
+    }
 }
 
 /// Clear all cache entries
@@ -410,6 +425,8 @@ pub struct SearchFilters {
     pub exclude_samples: bool,
     pub exclude_sets: bool,
     pub only_in_stock: bool,
+    /// Filter by tea series (exact match)
+    pub series: Option<String>,
 }
 
 /// Database statistics
@@ -641,6 +658,11 @@ pub async fn search_teas(
     if filters.only_in_stock {
         conditions.push("in_stock = 1".to_string());
     }
+    if let Some(ref series) = filters.series {
+        // Escape single quotes in series name to prevent SQL injection
+        let escaped = series.replace('\'', "''");
+        conditions.push(format!("series = '{}'", escaped));
+    }
 
     let where_clause = conditions.join(" AND ");
 
@@ -665,7 +687,10 @@ pub async fn search_teas(
     );
 
     let mut rows = conn
-        .query(&sql, (query_vec_str.as_str(), query_vec_str.as_str(), limit as i64))
+        .query(
+            &sql,
+            (query_vec_str.as_str(), query_vec_str.as_str(), limit as i64),
+        )
         .await
         .context("Failed to search teas")?;
 
@@ -696,11 +721,23 @@ pub async fn get_stats() -> Result<DatabaseStats> {
 
     // Total count
     let mut rows = conn.query("SELECT COUNT(*) FROM teas", ()).await?;
-    let total: i64 = rows.next().await?.map(|r| r.get(0)).transpose()?.unwrap_or(0);
+    let total: i64 = rows
+        .next()
+        .await?
+        .map(|r| r.get(0))
+        .transpose()?
+        .unwrap_or(0);
 
     // In stock count
-    let mut rows = conn.query("SELECT COUNT(*) FROM teas WHERE in_stock = 1", ()).await?;
-    let in_stock: i64 = rows.next().await?.map(|r| r.get(0)).transpose()?.unwrap_or(0);
+    let mut rows = conn
+        .query("SELECT COUNT(*) FROM teas WHERE in_stock = 1", ())
+        .await?;
+    let in_stock: i64 = rows
+        .next()
+        .await?
+        .map(|r| r.get(0))
+        .transpose()?
+        .unwrap_or(0);
 
     // Get unique series
     let mut rows = conn
@@ -732,7 +769,12 @@ pub async fn count_teas() -> Result<usize> {
     let conn = get_connection()?;
 
     let mut rows = conn.query("SELECT COUNT(*) FROM teas", ()).await?;
-    let count: i64 = rows.next().await?.map(|r| r.get(0)).transpose()?.unwrap_or(0);
+    let count: i64 = rows
+        .next()
+        .await?
+        .map(|r| r.get(0))
+        .transpose()?
+        .unwrap_or(0);
 
     Ok(count as usize)
 }

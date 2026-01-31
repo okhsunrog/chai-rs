@@ -8,10 +8,10 @@ pub const BUILD_TIME: &str = env!("BUILD_TIME");
 #[cfg(feature = "ssr")]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    use axum::{Router, routing::get};
     use axum::response::Json;
+    use axum::{Router, routing::get};
     use axum_governor::GovernorLayer;
-    use chai_core::{turso, DbConfig};
+    use chai_core::{DbConfig, turso};
     use chai_web::app::App;
     use lazy_limit::{Duration, RuleConfig, init_rate_limiter};
     use leptos::prelude::*;
@@ -33,7 +33,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!(
         "Starting Tea Advisor v{}-{} (built {})",
-        VERSION, GIT_HASH, BUILD_TIME
+        VERSION,
+        GIT_HASH,
+        BUILD_TIME
     );
 
     // Validate required environment variables

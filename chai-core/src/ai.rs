@@ -342,6 +342,7 @@ pub async fn chat_completion(
         exclude_samples: analysis.exclude_samples,
         exclude_sets: analysis.exclude_sets,
         only_in_stock: analysis.only_in_stock,
+        series: None, // AI chat doesn't filter by series
     };
 
     info!(

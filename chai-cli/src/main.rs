@@ -40,7 +40,7 @@ enum Commands {
         #[arg(long)]
         force: bool,
 
-        /// Use SQLite cache instead of fetching from website
+        /// Use cached HTML instead of fetching from website
         #[arg(long)]
         from_cache: bool,
     },
@@ -135,9 +135,9 @@ async fn main() -> Result<()> {
             query,
             limit,
             only_available,
-            series: _series,
+            series,
         } => {
-            search_command(query, limit, only_available).await?;
+            search_command(query, limit, only_available, series).await?;
         }
         Commands::Get { url } => {
             get_command(url).await?;
@@ -668,8 +668,16 @@ struct SyncStats {
     errors: usize,
 }
 
-async fn search_command(query: String, limit: usize, only_available: bool) -> Result<()> {
+async fn search_command(
+    query: String,
+    limit: usize,
+    only_available: bool,
+    series: Option<String>,
+) -> Result<()> {
     info!("Search: \"{}\"", query);
+    if let Some(ref s) = series {
+        info!("Filter by series: {}", s);
+    }
 
     // Create embedding for query
     let embeddings_config = chai_core::embeddings::EmbeddingsConfig::from_env()?;
@@ -683,6 +691,7 @@ async fn search_command(query: String, limit: usize, only_available: bool) -> Re
         exclude_samples: false,
         exclude_sets: false,
         only_in_stock: only_available,
+        series,
     };
 
     // Execute search

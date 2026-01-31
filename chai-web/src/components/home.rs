@@ -51,9 +51,9 @@ pub async fn get_tea_recommendations(
 #[server]
 pub async fn get_teas_count() -> Result<usize, ServerFnError> {
     // Public endpoint - no auth required (just shows count)
-    use crate::server::qdrant;
+    use crate::server::db;
 
-    qdrant::count_teas()
+    db::count_teas()
         .await
         .map_err(|e| ServerFnError::new(e.to_string()))
 }

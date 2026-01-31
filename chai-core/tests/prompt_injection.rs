@@ -3,7 +3,7 @@
 //! Run with: cargo test -p chai-core --test prompt_injection -- --ignored --nocapture
 
 use anyhow::Result;
-use chai_core::{ai, Config};
+use chai_core::{Config, ai};
 
 /// Test case with expected result
 struct TestCase {
@@ -167,8 +167,8 @@ const TEST_CASES: &[TestCase] = &[
 async fn test_injection_detection() -> Result<()> {
     dotenvy::dotenv().ok();
 
-    let api_key = std::env::var("OPENROUTER_API_KEY")
-        .expect("OPENROUTER_API_KEY required for this test");
+    let api_key =
+        std::env::var("OPENROUTER_API_KEY").expect("OPENROUTER_API_KEY required for this test");
     let config = Config::from_env()?;
 
     let mut passed = 0;
