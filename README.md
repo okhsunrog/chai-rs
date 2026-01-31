@@ -1,122 +1,124 @@
 # Tea Advisor
 
-AI-powered tea discovery platform with semantic search. Scrapes tea data from [beliyles.com](https://beliyles.com), creates vector embeddings, and provides personalized recommendations through a web UI.
+> [English version](README.en.md)
 
-## Features
+Платформа для подбора чая с AI и семантическим поиском. Собирает данные о чае с [beliyles.com](https://beliyles.com), создаёт векторные эмбеддинги и даёт персонализированные рекомендации через веб-интерфейс.
 
-- **Semantic Search** - Find teas by description, taste, mood, or ingredients using vector similarity
-- **Two-Stage AI Pipeline** - Query analysis + intelligent selection from candidates
-- **Smart Filters** - Exclude samples, sets, out-of-stock items; filter by series
-- **User Authentication** - JWT-based auth with Argon2 password hashing
-- **Modern Stack** - Leptos 0.8 (Rust WASM), Axum, Turso (embedded SQLite with vectors)
+## Возможности
 
-## Architecture
+- **Семантический поиск** - Поиск чая по описанию, вкусу, настроению или ингредиентам через векторное сходство
+- **Двухэтапный AI-пайплайн** - Анализ запроса + интеллектуальный отбор из кандидатов
+- **Умные фильтры** - Исключение пробников, наборов, товаров не в наличии; фильтр по серии
+- **Аутентификация** - JWT + хеширование паролей Argon2
+- **Современный стек** - Leptos 0.8 (Rust WASM), Axum, Turso (встроенный SQLite с векторами)
+
+## Архитектура
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│  User Query                                             │
+│  Запрос пользователя                                    │
 └─────────────────────────────────────────────────────────┘
                     │
                     ▼
 ┌─────────────────────────────────────────────────────────┐
-│  Stage 1: Query Analysis (LLM)                         │
-│  → Extracts: search terms, count, filters              │
+│  Этап 1: Анализ запроса (LLM)                          │
+│  → Извлекает: поисковые термины, количество, фильтры   │
 └─────────────────────────────────────────────────────────┘
                     │
                     ▼
 ┌─────────────────────────────────────────────────────────┐
-│  Stage 2: Vector Search (Turso)                        │
-│  → Returns N+4 candidates via cosine similarity        │
+│  Этап 2: Векторный поиск (Turso)                       │
+│  → Возвращает N+4 кандидата по косинусному сходству    │
 └─────────────────────────────────────────────────────────┘
                     │
                     ▼
 ┌─────────────────────────────────────────────────────────┐
-│  Stage 3: Selection & Description (LLM)                │
-│  → Picks best N teas, generates descriptions           │
+│  Этап 3: Отбор и описание (LLM)                        │
+│  → Выбирает лучшие N чаёв, генерирует описания         │
 └─────────────────────────────────────────────────────────┘
 ```
 
-## Quick Start
+## Быстрый старт
 
-### Prerequisites
+### Требования
 
 - Rust 2024 edition
 - [cargo-leptos](https://github.com/leptos-rs/cargo-leptos)
-- OpenRouter API key
+- OpenRouter API ключ
 
-### Setup
+### Установка
 
-1. Clone and configure:
+1. Клонируйте и настройте:
 ```bash
 git clone https://github.com/okhsunrog/chai-rs
 cd chai-rs
 cp .env.example .env
-# Edit .env with your OPENROUTER_API_KEY and JWT_SECRET
+# Отредактируйте .env: укажите OPENROUTER_API_KEY и JWT_SECRET
 ```
 
-2. Populate the database:
+2. Заполните базу данных:
 ```bash
-# Cache tea pages from website
+# Кэширование страниц с сайта
 cargo run --package chai-cli -- cache
 
-# Create embeddings and sync to database
+# Создание эмбеддингов и синхронизация в базу
 cargo run --package chai-cli -- sync --from-cache
 ```
 
-3. Run the web app:
+3. Запустите веб-приложение:
 ```bash
 cd chai-web
 cargo leptos watch
 ```
 
-Open http://localhost:3000
+Откройте http://localhost:3000
 
-## CLI Commands
+## Команды CLI
 
 ```bash
-# Cache HTML pages from website
+# Кэширование HTML-страниц с сайта
 cargo run --package chai-cli -- cache
 
-# Sync teas to database with embeddings
+# Синхронизация чаёв в базу с эмбеддингами
 cargo run --package chai-cli -- sync --from-cache [--force]
 
-# Search teas
-cargo run --package chai-cli -- search "spicy warming tea" --limit 5
+# Поиск чаёв
+cargo run --package chai-cli -- search "пряный согревающий чай" --limit 5
 
-# Show database statistics
+# Статистика базы данных
 cargo run --package chai-cli -- stats
 ```
 
-## Configuration
+## Конфигурация
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `OPENROUTER_API_KEY` | OpenRouter API key | (required) |
-| `JWT_SECRET` | JWT signing secret | (required) |
-| `DATABASE_PATH` | Turso database path | `data/chai.db` |
-| `EMBEDDINGS_MODEL` | Embedding model | `qwen/qwen3-embedding-8b` |
-| `VECTOR_SIZE` | Embedding dimensions | `4096` |
+| Переменная | Описание | По умолчанию |
+|------------|----------|--------------|
+| `OPENROUTER_API_KEY` | Ключ OpenRouter API | (обязательно) |
+| `JWT_SECRET` | Секрет для подписи JWT | (обязательно) |
+| `DATABASE_PATH` | Путь к базе Turso | `data/chai.db` |
+| `EMBEDDINGS_MODEL` | Модель эмбеддингов | `qwen/qwen3-embedding-8b` |
+| `VECTOR_SIZE` | Размерность эмбеддингов | `4096` |
 
-## Project Structure
+## Структура проекта
 
 ```
 chai-rs/
-├── chai-core/          # Shared library (AI, auth, database, scraper)
-├── chai-cli/           # CLI tool for data management
-├── chai-web/           # Web UI (Leptos + Axum)
-├── deploy/             # Deployment scripts and systemd services
+├── chai-core/          # Общая библиотека (AI, auth, БД, скрапер)
+├── chai-cli/           # CLI для управления данными
+├── chai-web/           # Веб-интерфейс (Leptos + Axum)
+├── deploy/             # Скрипты деплоя и systemd-сервисы
 └── data/
-    └── chai.db         # Turso database (users, cache, teas + embeddings)
+    └── chai.db         # База Turso (пользователи, кэш, чаи + эмбеддинги)
 ```
 
-## Tech Stack
+## Технологии
 
-- **Frontend**: Leptos 0.8 (Rust → WASM), SSR + Hydration
-- **Backend**: Axum, Tower (rate limiting)
-- **Database**: Turso (libSQL - SQLite with vector search)
-- **AI**: OpenRouter (embeddings + LLM)
-- **Auth**: JWT + Argon2
+- **Фронтенд**: Leptos 0.8 (Rust → WASM), SSR + Hydration
+- **Бэкенд**: Axum, Tower (rate limiting)
+- **База данных**: Turso (libSQL - SQLite с векторным поиском)
+- **AI**: OpenRouter (эмбеддинги + LLM)
+- **Авторизация**: JWT + Argon2
 
-## License
+## Лицензия
 
 MIT
