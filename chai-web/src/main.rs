@@ -46,7 +46,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tracing::warn!("OPENROUTER_API_KEY not set - AI features will not work");
     }
 
-    // Initialize Turso database (unified SQLite with vector support)
+    // Initialize Turso database
     let db_config = DbConfig::from_env();
     turso::init_database(&db_config).await?;
     tracing::info!("Database initialized at {}", db_config.path);

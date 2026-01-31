@@ -14,7 +14,7 @@ serde_json = "1.0"
 tokio = { version = "1.49", features = ["full"] }
 reqwest = { version = "0.13", features = ["json"] }
 
-# Database (embedded SQLite with vector support)
+# Database (embedded Rust database with vector search)
 turso = "0.4"
 
 # Crypto & utilities

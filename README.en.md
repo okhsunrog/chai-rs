@@ -119,6 +119,10 @@ chai-rs/
 - **AI**: OpenRouter (embeddings + LLM)
 - **Auth**: JWT + Argon2
 
+## Why Turso?
+
+Turso Database is a project to build the next evolution of SQLite in Rust, with a strong open contribution focus and features like native async support, vector search, and more. Unlike libSQL (a SQLite fork), Turso is a complete rewrite from scratch.
+
 ## License
 
 MIT

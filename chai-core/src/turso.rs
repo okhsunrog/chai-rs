@@ -1,4 +1,4 @@
-//! Unified database module using Turso (embedded SQLite with vector support)
+//! Unified database module using Turso (embedded Rust database with vector search)
 //!
 //! This module provides:
 //! - Database connection management
