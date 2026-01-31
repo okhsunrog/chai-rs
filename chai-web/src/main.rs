@@ -8,10 +8,10 @@ pub const BUILD_TIME: &str = env!("BUILD_TIME");
 #[cfg(feature = "ssr")]
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    use axum::{Router, routing::get};
     use axum::response::Json;
+    use axum::{Router, routing::get};
     use axum_governor::GovernorLayer;
-    use chai_core::db::{self, DbConfig};
+    use chai_core::{DbConfig, turso};
     use chai_web::app::App;
     use lazy_limit::{Duration, RuleConfig, init_rate_limiter};
     use leptos::prelude::*;
@@ -33,7 +33,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     tracing::info!(
         "Starting Tea Advisor v{}-{} (built {})",
-        VERSION, GIT_HASH, BUILD_TIME
+        VERSION,
+        GIT_HASH,
+        BUILD_TIME
     );
 
     // Validate required environment variables
@@ -44,10 +46,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tracing::warn!("OPENROUTER_API_KEY not set - AI features will not work");
     }
 
-    // Initialize SQLite database
+    // Initialize Turso database (unified SQLite with vector support)
     let db_config = DbConfig::from_env();
-    db::init_database(&db_config).await?;
-    tracing::info!("SQLite database initialized at {}", db_config.path);
+    turso::init_database(&db_config).await?;
+    tracing::info!("Database initialized at {}", db_config.path);
 
     // Initialize rate limiter: 10 requests per second globally, 2 req/sec for AI endpoint
     init_rate_limiter!(
@@ -125,10 +127,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map_err(|e| format!("Failed to bind to {}: {}", addr, e))?;
 
     tracing::info!("Server running at http://{}", addr);
-    tracing::info!(
-        "Qdrant: {}",
-        std::env::var("QDRANT_URL").unwrap_or_else(|_| "http://localhost:6334".to_string())
-    );
 
     axum::serve(
         listener,

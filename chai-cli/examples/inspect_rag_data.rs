@@ -1,15 +1,22 @@
 use anyhow::Result;
-use chai_core::{Config, qdrant};
+use chai_core::{DbConfig, embeddings, turso};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenvy::dotenv().ok();
-    let config = Config::from_env()?;
+
+    // Initialize database
+    let db_config = DbConfig::from_env();
+    turso::init_database(&db_config).await?;
+
+    // Create embeddings client
+    let embeddings_config = embeddings::EmbeddingsConfig::from_env()?;
+    let embeddings_client = embeddings::EmbeddingsClient::new(embeddings_config)?;
 
     let queries = vec!["Кислый чай с облепихой", "Успокаивающий чай на ночь"];
 
     println!("╔════════════════════════════════════════════════════════════════╗");
-    println!("║              🔍 ИНСПЕКЦИЯ ДАННЫХ ИЗ QDRANT                     ║");
+    println!("║              🔍 ИНСПЕКЦИЯ ДАННЫХ ИЗ БАЗЫ ДАННЫХ               ║");
     println!("╚════════════════════════════════════════════════════════════════╝\n");
 
     for query in queries {
@@ -17,7 +24,11 @@ async fn main() -> Result<()> {
         println!("📝 Запрос: {}", query);
         println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
-        let results = qdrant::search_teas(query, 5, &config).await?;
+        let query_embedding = embeddings_client
+            .create_embedding(query.to_string())
+            .await?;
+        let results =
+            turso::search_teas(&query_embedding, 5, &turso::SearchFilters::default()).await?;
 
         println!("Найдено чаёв: {}\n", results.len());
 
@@ -74,7 +85,7 @@ async fn main() -> Result<()> {
     println!("\n╔════════════════════════════════════════════════════════════════╗");
     println!("║                        📊 ВЫВОДЫ                               ║");
     println!("╚════════════════════════════════════════════════════════════════╝\n");
-    println!("Анализ данных из Qdrant показывает:");
+    println!("Анализ данных из базы данных показывает:");
     println!("1. Какие поля заполнены у всех чаёв");
     println!("2. Качество описаний (если есть)");
     println!("3. Полнота данных о составе");

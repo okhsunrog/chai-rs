@@ -1,10 +1,17 @@
 use anyhow::Result;
-use chai_core::{Config, qdrant};
+use chai_core::{DbConfig, embeddings, turso};
 
 #[tokio::main]
 async fn main() -> Result<()> {
     dotenvy::dotenv().ok();
-    let config = Config::from_env()?;
+
+    // Initialize database
+    let db_config = DbConfig::from_env();
+    turso::init_database(&db_config).await?;
+
+    // Create embeddings client
+    let embeddings_config = embeddings::EmbeddingsConfig::from_env()?;
+    let embeddings_client = embeddings::EmbeddingsClient::new(embeddings_config)?;
 
     println!("╔════════════════════════════════════════════════════════════════╗");
     println!("║              🆔 ТЕСТ УНИКАЛЬНЫХ ID                             ║");
@@ -17,7 +24,11 @@ async fn main() -> Result<()> {
         println!("📝 Запрос: {}", query);
         println!("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
-        let results = qdrant::search_teas(query, 5, &config).await?;
+        let query_embedding = embeddings_client
+            .create_embedding(query.to_string())
+            .await?;
+        let results =
+            turso::search_teas(&query_embedding, 5, &turso::SearchFilters::default()).await?;
 
         println!("Найдено чаёв: {}\n", results.len());
 
@@ -48,12 +59,15 @@ async fn main() -> Result<()> {
     println!("╚════════════════════════════════════════════════════════════════╝\n");
 
     // Получаем первый чай из первого поиска
-    let results = qdrant::search_teas(&queries[0], 1, &config).await?;
+    let query_embedding = embeddings_client
+        .create_embedding(queries[0].to_string())
+        .await?;
+    let results = turso::search_teas(&query_embedding, 1, &turso::SearchFilters::default()).await?;
     if let Some(result) = results.first() {
         let test_id = &result.tea.id;
         println!("Тестируем поиск по ID: {}", test_id);
 
-        match qdrant::get_tea_by_id(test_id, &config).await? {
+        match turso::get_tea_by_id(test_id).await? {
             Some(tea) => {
                 println!("✅ Чай найден по ID!");
                 println!(

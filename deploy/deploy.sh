@@ -54,11 +54,11 @@ rsync -avz --progress "$TEMP_DIR/chai-web" "$SERVER:$DEPLOY_DIR/"
 rsync -avz --progress --delete "$TEMP_DIR/site/" "$SERVER:$DEPLOY_DIR/site/"
 
 echo ""
-echo "=== Installing systemd services ==="
+echo "=== Installing systemd service ==="
 
-# Copy and enable services
-scp deploy/qdrant-chai.service deploy/chai.service "$SERVER:/etc/systemd/system/"
-ssh "$SERVER" "systemctl daemon-reload && systemctl enable qdrant-chai chai"
+# Copy and enable service
+scp deploy/chai.service "$SERVER:/etc/systemd/system/"
+ssh "$SERVER" "systemctl daemon-reload && systemctl enable chai"
 
 echo ""
 echo "=== Checking .env file ==="
@@ -79,15 +79,14 @@ if ! ssh "$SERVER" "test -f $DEPLOY_DIR/.env"; then
 fi
 
 echo ""
-echo "=== Restarting services ==="
+echo "=== Restarting service ==="
 
-ssh "$SERVER" "systemctl restart qdrant-chai && sleep 3 && systemctl restart chai"
+ssh "$SERVER" "systemctl restart chai"
 ssh "$SERVER" "systemctl status chai --no-pager"
 
 echo ""
 echo "=== Deployment complete! ==="
 echo ""
 echo "Service: http://mira.local:3031"
-echo "Qdrant:  http://mira.local:6333/dashboard"
 echo ""
 echo "Logs: ssh $SERVER 'journalctl -u chai -f'"

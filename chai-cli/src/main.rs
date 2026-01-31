@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use chai_core::{DbConfig, QdrantClient, QdrantConfig, Tea, cache, db, scraper, tea_utils};
+use chai_core::{DbConfig, Tea, cache, scraper, tea_utils, turso};
 use clap::{Parser, Subcommand};
 use reqwest::Client;
 use std::path::PathBuf;
@@ -30,7 +30,7 @@ enum Commands {
         only_available: bool,
     },
 
-    /// Sync teas from website to Qdrant (incremental update)
+    /// Sync teas from website to database (incremental update)
     Sync {
         /// Limit number of teas (for testing)
         #[arg(short, long)]
@@ -40,19 +40,19 @@ enum Commands {
         #[arg(long)]
         force: bool,
 
-        /// Use SQLite cache instead of fetching from website
+        /// Use cached HTML instead of fetching from website
         #[arg(long)]
         from_cache: bool,
     },
 
-    /// Cache HTML pages to SQLite database
+    /// Cache HTML pages to database
     Cache {
         /// Limit number of pages (for testing)
         #[arg(short, long)]
         limit: Option<usize>,
     },
 
-    /// Migrate JSON cache to SQLite
+    /// Migrate JSON cache to database
     MigrateCache {
         /// Path to JSON cache file
         #[arg(short, long, default_value = "cache.json")]
@@ -101,9 +101,9 @@ async fn main() -> Result<()> {
     // Load .env
     dotenvy::dotenv().ok();
 
-    // Initialize SQLite database for cache
+    // Initialize database
     let db_config = DbConfig::from_env();
-    db::init_database(&db_config).await?;
+    turso::init_database(&db_config).await?;
 
     let cli = Cli::parse();
 
@@ -234,7 +234,7 @@ fn save_teas(teas: &[Tea], path: &PathBuf) -> Result<()> {
 }
 
 async fn cache_command(limit: Option<usize>) -> Result<()> {
-    info!("Caching HTML pages to SQLite");
+    info!("Caching HTML pages to database");
 
     let client = Client::builder()
         .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36")
@@ -306,11 +306,11 @@ async fn cache_command(limit: Option<usize>) -> Result<()> {
 }
 
 async fn migrate_cache_command(input: PathBuf) -> Result<()> {
-    info!("Migrating JSON cache to SQLite from {}", input.display());
+    info!("Migrating JSON cache to database from {}", input.display());
 
     let count = cache::migrate_from_json(input.to_str().unwrap()).await?;
 
-    info!("Done! Migrated {} entries to SQLite", count);
+    info!("Done! Migrated {} entries to database", count);
 
     Ok(())
 }
@@ -360,7 +360,7 @@ fn chrono_lite(timestamp: i64) -> String {
 }
 
 async fn sync_command(limit: Option<usize>, force: bool, from_cache: bool) -> Result<()> {
-    info!("Syncing teas from website to Qdrant");
+    info!("Syncing teas from website to database");
 
     // Create clients
     let http_client = Client::builder()
@@ -372,18 +372,9 @@ async fn sync_command(limit: Option<usize>, force: bool, from_cache: bool) -> Re
 
     let embeddings_client = chai_core::embeddings::EmbeddingsClient::new(embeddings_config)?;
 
-    let qdrant_config = QdrantConfig::from_env()?;
-    info!("Qdrant: {}", qdrant_config.url);
-    info!("Collection: {}", qdrant_config.collection_name);
-
-    let db_client = QdrantClient::new(qdrant_config).await?;
-
-    // Create collection if it doesn't exist
-    db_client.ensure_collection().await?;
-
     // Get URL list from cache or website
     let urls = if from_cache {
-        info!("Loading URLs from SQLite cache");
+        info!("Loading URLs from cache");
         cache::list_urls().await?
     } else {
         info!("Fetching URLs from sitemap");
@@ -398,9 +389,9 @@ async fn sync_command(limit: Option<usize>, force: bool, from_cache: bool) -> Re
 
     info!("Will process {} teas", urls_to_process.len());
 
-    // Get list of all URLs from Qdrant for checking deleted items
+    // Get list of all URLs from database for checking deleted items
     let existing_urls = if !force {
-        db_client.get_all_urls().await?
+        turso::get_all_tea_urls().await?
     } else {
         Vec::new()
     };
@@ -417,7 +408,7 @@ async fn sync_command(limit: Option<usize>, force: bool, from_cache: bool) -> Re
 
     for (i, url) in urls_to_process.iter().enumerate() {
         let scrape_result = if from_cache {
-            // Use SQLite cache
+            // Use cache
             match cache::get(url).await? {
                 Some(entry) => scraper::parse_tea_from_html(url, &entry.html),
                 None => {
@@ -564,7 +555,7 @@ async fn sync_command(limit: Option<usize>, force: bool, from_cache: bool) -> Re
     );
 
     // STEP 3: Vectorize and save only main products
-    info!("Step 3/3: Vectorizing and saving to Qdrant...");
+    info!("Step 3/3: Vectorizing and saving to database...");
 
     #[derive(Clone, Copy)]
     enum UpdateType {
@@ -584,9 +575,9 @@ async fn sync_command(limit: Option<usize>, force: bool, from_cache: bool) -> Re
             let update_info = if force {
                 Some(UpdateType::Update)
             } else {
-                match db_client.get_by_url(url).await? {
-                    Some(existing) => {
-                        if existing.content_hash != content_hash {
+                match turso::get_tea_with_hash(url).await? {
+                    Some((_, existing_hash)) => {
+                        if existing_hash != content_hash {
                             Some(UpdateType::Update)
                         } else {
                             stats.skipped += 1;
@@ -626,9 +617,7 @@ async fn sync_command(limit: Option<usize>, force: bool, from_cache: bool) -> Re
                 for ((tea, hash, update_type), embedding) in
                     batch_items.iter().zip(embeddings.iter())
                 {
-                    db_client
-                        .upsert_tea(tea, embedding.clone(), hash.clone())
-                        .await?;
+                    turso::upsert_tea(tea, Some(embedding.clone()), hash).await?;
 
                     match update_type {
                         UpdateType::Add => stats.added += 1,
@@ -650,7 +639,7 @@ async fn sync_command(limit: Option<usize>, force: bool, from_cache: bool) -> Re
             main_products.iter().map(|s| s.as_str()).collect();
         for existing_url in existing_urls {
             if !current_urls.contains(existing_url.as_str()) {
-                db_client.delete_by_url(&existing_url).await?;
+                turso::delete_tea_by_url(&existing_url).await?;
                 stats.deleted += 1;
             }
         }
@@ -686,43 +675,28 @@ async fn search_command(
     series: Option<String>,
 ) -> Result<()> {
     info!("Search: \"{}\"", query);
+    if let Some(ref s) = series {
+        info!("Filter by series: {}", s);
+    }
 
-    // Create clients
+    // Create embedding for query
     let embeddings_config = chai_core::embeddings::EmbeddingsConfig::from_env()?;
     let embeddings_client = chai_core::embeddings::EmbeddingsClient::new(embeddings_config)?;
 
-    let qdrant_config = QdrantConfig::from_env()?;
-    let db_client = QdrantClient::new(qdrant_config).await?;
-
-    // Create embedding for search query
     info!("Creating embedding for query...");
     let query_embedding = embeddings_client.create_embedding(query.clone()).await?;
 
-    // Create filter if needed
-    let filter = if only_available || series.is_some() {
-        let mut conditions = Vec::new();
-
-        if only_available {
-            conditions.push(qdrant_client::qdrant::Condition::matches("in_stock", true));
-        }
-
-        if let Some(series_name) = series {
-            conditions.push(qdrant_client::qdrant::Condition::matches(
-                "series",
-                series_name,
-            ));
-        }
-
-        Some(qdrant_client::qdrant::Filter::must(conditions))
-    } else {
-        None
+    // Create filters
+    let filters = turso::SearchFilters {
+        exclude_samples: false,
+        exclude_sets: false,
+        only_in_stock: only_available,
+        series,
     };
 
     // Execute search
     info!("Searching similar teas...");
-    let results = db_client
-        .search(query_embedding, limit as u64, filter)
-        .await?;
+    let results = turso::search_teas(&query_embedding, limit, &filters).await?;
 
     // Print results
     if results.is_empty() {
@@ -795,15 +769,11 @@ async fn search_command(
 async fn get_command(url: String) -> Result<()> {
     info!("Getting tea by URL: {}", url);
 
-    let qdrant_config = QdrantConfig::from_env()?;
-    let db_client = QdrantClient::new(qdrant_config).await?;
+    let tea_option = turso::get_tea_with_hash(&url).await?;
 
-    let tea_point_option = db_client.get_by_url(&url).await?;
-
-    match tea_point_option {
-        Some(tea_point) => {
+    match tea_option {
+        Some((tea, content_hash)) => {
             info!("Tea found\n");
-            let tea = &tea_point.tea;
 
             println!("Name: {}", tea.name.as_deref().unwrap_or("No name"));
             println!("URL: {}", tea.url);
@@ -856,7 +826,7 @@ async fn get_command(url: String) -> Result<()> {
             }
 
             println!("Is sample: {}", tea.is_sample);
-            println!("Content hash: {}", tea_point.content_hash);
+            println!("Content hash: {}", content_hash);
 
             Ok(())
         }
@@ -870,10 +840,7 @@ async fn get_command(url: String) -> Result<()> {
 async fn stats_command() -> Result<()> {
     info!("Getting statistics");
 
-    let qdrant_config = QdrantConfig::from_env()?;
-    let db_client = QdrantClient::new(qdrant_config).await?;
-
-    let stats = db_client.get_stats().await?;
+    let stats = turso::get_stats().await?;
 
     println!("\n=== Tea Database Statistics ===\n");
 

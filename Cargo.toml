@@ -14,8 +14,8 @@ serde_json = "1.0"
 tokio = { version = "1.49", features = ["full"] }
 reqwest = { version = "0.13", features = ["json"] }
 
-# Database & Vector search
-qdrant-client = "1.16"
+# Database (embedded SQLite with vector support)
+turso = "0.4"
 
 # Crypto & utilities
 sha2 = "0.10"

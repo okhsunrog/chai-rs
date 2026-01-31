@@ -6,14 +6,14 @@ use uuid::Uuid;
 /// This ID is used for API communication and LLM prompts where a shorter
 /// identifier is more practical. The ID is deterministic based on the URL.
 ///
-/// For Qdrant point IDs, use [`generate_point_id`] which returns the full UUID.
+/// For database primary keys, use [`generate_point_id`] which returns the full UUID.
 #[must_use]
 pub fn generate_tea_id(url: &str) -> String {
     let uuid = Uuid::new_v5(&Uuid::NAMESPACE_URL, url.as_bytes());
     uuid.to_string()[..8].to_string()
 }
 
-/// Generates a full UUID v5 from URL for use as Qdrant point ID
+/// Generates a full UUID v5 from URL for use as database primary key
 ///
 /// This ensures uniqueness for database storage. The short [`generate_tea_id`]
 /// is used for API/LLM communication, while this full UUID is for internal storage.
@@ -108,7 +108,7 @@ pub struct TeaCard {
     /// Short LLM-generated description (1-2 sentences)
     pub short_description: String,
 
-    // Обогащённые данные из Qdrant
+    // Обогащённые данные из базы данных
     #[serde(default)]
     pub price: Option<String>,
     #[serde(default)]

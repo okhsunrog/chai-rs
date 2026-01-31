@@ -4,7 +4,6 @@
 
 - Rust toolchain with `cargo-leptos` installed
 - SSH access to `root@mira.local`
-- Docker installed on mira.local
 
 ## Quick Deploy
 
@@ -23,7 +22,7 @@ JWT_SECRET=$(openssl rand -base64 32)
 EOF"
 ```
 
-### 2. Sync tea data to Qdrant
+### 2. Sync tea data to database
 
 After deployment, sync the tea database:
 
@@ -32,14 +31,11 @@ After deployment, sync the tea database:
 cargo run --package chai-cli -- sync --from-cache
 ```
 
-Or copy the local Qdrant data:
+Or copy the local database file:
 
 ```bash
-# Stop local Qdrant first for data integrity
-docker stop <local-qdrant-container>
-rsync -avz data/qdrant_storage/ root@mira.local:/opt/qdrant_storage/
-docker start <local-qdrant-container>
-ssh root@mira.local "systemctl restart qdrant-chai"
+rsync -avz data/chai.db root@mira.local:/opt/chai/data/
+ssh root@mira.local "systemctl restart chai"
 ```
 
 ### 3. Configure reverse proxy (cloud-forge)
@@ -66,12 +62,10 @@ Moscow VPS (HAProxy + Nginx)
     v (WireGuard 10.66.66.x)
 mira.local
     |
-    +-- qdrant-chai.service (Docker, ports 6333/6334)
-    |       +-- /opt/qdrant_storage/
-    |
-    +-- chai.service (port 3031, depends on qdrant-chai)
+    +-- chai.service (port 3031)
             +-- Leptos SSR (Axum)
-            +-- SQLite: /opt/chai/data/chai.db
+            +-- Turso DB: /opt/chai/data/chai.db
+                (users, cache, teas with vector embeddings)
 ```
 
 ## Service Management
@@ -80,15 +74,11 @@ mira.local
 # View chai logs
 ssh root@mira.local "journalctl -u chai -f"
 
-# View Qdrant logs
-ssh root@mira.local "journalctl -u qdrant-chai -f"
+# Restart service
+ssh root@mira.local "systemctl restart chai"
 
-# Restart services
-ssh root@mira.local "systemctl restart qdrant-chai chai"
-
-# Qdrant dashboard (via SSH tunnel)
-ssh -L 6333:127.0.0.1:6333 root@mira.local
-# Then open http://localhost:6333/dashboard
+# Check service status
+ssh root@mira.local "systemctl status chai"
 ```
 
 ## Environment Variables
@@ -98,9 +88,7 @@ ssh -L 6333:127.0.0.1:6333 root@mira.local
 | `OPENROUTER_API_KEY` | OpenRouter API key for embeddings/LLM | (required) |
 | `JWT_SECRET` | Secret for JWT token signing | (required) |
 | `LEPTOS_SITE_ADDR` | Server bind address | `0.0.0.0:3031` |
-| `SQLITE_DATABASE_PATH` | SQLite database path | `/opt/chai/data/chai.db` |
-| `QDRANT_URL` | Qdrant gRPC URL | `http://127.0.0.1:6334` |
-| `QDRANT_COLLECTION` | Qdrant collection name | `teas` |
+| `DATABASE_PATH` | Turso database path | `/opt/chai/data/chai.db` |
 | `VECTOR_SIZE` | Embedding vector size | `4096` |
 
 ## Data Locations
@@ -109,7 +97,6 @@ ssh -L 6333:127.0.0.1:6333 root@mira.local
 |------|------|
 | Binary | `/opt/chai/chai-web` |
 | Static assets | `/opt/chai/site/` |
-| SQLite DB | `/opt/chai/data/chai.db` |
-| Qdrant storage | `/opt/qdrant_storage/` |
+| Database | `/opt/chai/data/chai.db` |
 | Environment | `/opt/chai/.env` |
-| Systemd services | `/etc/systemd/system/chai.service`, `/etc/systemd/system/qdrant-chai.service` |
+| Systemd service | `/etc/systemd/system/chai.service` |
