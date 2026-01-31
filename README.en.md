@@ -10,7 +10,7 @@ AI-powered tea discovery platform with semantic search. Scrapes tea data from [b
 - **Two-Stage AI Pipeline** - Query analysis + intelligent selection from candidates
 - **Smart Filters** - Exclude samples, sets, out-of-stock items; filter by series
 - **User Authentication** - JWT-based auth with Argon2 password hashing
-- **Modern Stack** - Leptos 0.8 (Rust WASM), Axum, Turso (embedded SQLite with vectors)
+- **Modern Stack** - Leptos 0.8 (Rust WASM), Axum, Turso (embedded Rust database with vector search)
 
 ## Architecture
 
@@ -115,7 +115,7 @@ chai-rs/
 
 - **Frontend**: Leptos 0.8 (Rust → WASM), SSR + Hydration
 - **Backend**: Axum, Tower (rate limiting)
-- **Database**: Turso (libSQL - SQLite with vector search)
+- **Database**: [Turso](https://github.com/tursodatabase/turso) (embedded Rust database with native vector search)
 - **AI**: OpenRouter (embeddings + LLM)
 - **Auth**: JWT + Argon2
 
