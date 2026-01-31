@@ -1,6 +1,7 @@
+use crate::embeddings::generate_embedding;
 use crate::http::{get_client, strip_markdown_json};
 use crate::models::{AIResponse, LLMResponse, SearchResult, Tea, TeaCard};
-use crate::qdrant::{self, SearchFilters};
+use crate::turso::{self, SearchFilters};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -15,7 +16,7 @@ const MODEL: &str = "google/gemini-2.5-flash-lite";
 /// Default number of teas to recommend if user doesn't specify
 const DEFAULT_RESULT_COUNT: usize = 3;
 
-/// Extra candidates to fetch from Qdrant (buffer for RAG errors)
+/// Extra candidates to fetch (buffer for RAG errors)
 const SEARCH_BUFFER: usize = 4;
 
 /// Maximum number of teas user can request
@@ -336,7 +337,7 @@ pub async fn chat_completion(
         analysis.only_in_stock
     );
 
-    // Stage 2: Search with filters
+    // Stage 2: Generate embedding and search with filters
     let filters = SearchFilters {
         exclude_samples: analysis.exclude_samples,
         exclude_sets: analysis.exclude_sets,
@@ -347,9 +348,17 @@ pub async fn chat_completion(
         "Stage 2: Searching for {} candidates (user wants {})",
         search_count, result_count
     );
-    let search_results =
-        qdrant::search_teas_filtered(&analysis.search_query, search_count, &filters, config)
-            .await?;
+
+    // Generate embedding for search query
+    let query_embedding = generate_embedding(
+        &analysis.search_query,
+        &config.openrouter_api_key,
+        &config.embedding_model,
+    )
+    .await?;
+
+    // Search using turso
+    let search_results = turso::search_teas(&query_embedding, search_count, &filters).await?;
 
     if search_results.is_empty() {
         anyhow::bail!("No teas found matching your query");
@@ -439,7 +448,7 @@ pub async fn chat_completion(
         .enumerate()
         .filter_map(|(idx, card)| card.sample_url.as_ref().map(|url| (idx, url.clone())))
         .map(|(idx, url)| async move {
-            let result = qdrant::get_tea_by_url(&url, config).await;
+            let result = turso::get_tea_by_url(&url).await;
             (idx, result)
         })
         .collect();

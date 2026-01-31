@@ -11,21 +11,17 @@ pub mod cache;
 #[cfg(feature = "server")]
 pub mod config;
 #[cfg(feature = "server")]
-pub mod database;
-#[cfg(feature = "server")]
-pub mod db;
-#[cfg(feature = "server")]
 pub mod embeddings;
 #[cfg(feature = "server")]
 pub mod http;
 #[cfg(feature = "server")]
 pub mod openrouter;
 #[cfg(feature = "server")]
-pub mod qdrant;
-#[cfg(feature = "server")]
 pub mod scraper;
 #[cfg(feature = "server")]
 pub mod tea_utils;
+#[cfg(feature = "server")]
+pub mod turso;
 
 // Re-export commonly used types
 pub use models::{
@@ -34,12 +30,10 @@ pub use models::{
 };
 
 #[cfg(feature = "server")]
-pub use auth::{AuthConfig, Claims, User, UserInfo};
+pub use auth::{AuthConfig, Claims, UserInfo};
 #[cfg(feature = "server")]
 pub use cache::CacheStats;
 #[cfg(feature = "server")]
 pub use config::Config;
 #[cfg(feature = "server")]
-pub use database::{DatabaseStats, QdrantClient, QdrantConfig};
-#[cfg(feature = "server")]
-pub use db::DbConfig;
+pub use turso::{CacheStats as TursoCacheStats, DatabaseStats, DbConfig, SearchFilters};

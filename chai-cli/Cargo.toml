@@ -18,7 +18,5 @@ reqwest = { workspace = true }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 dotenvy = { workspace = true }
-qdrant-client = { workspace = true }
-
 # CLI specific
 clap = { workspace = true }

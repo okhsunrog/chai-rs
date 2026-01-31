@@ -6,7 +6,7 @@
 //! - Password hashing with Argon2
 //! - JWT token validation
 
-use crate::db;
+use crate::turso;
 use anyhow::{Context, Result};
 use argon2::{
     Argon2,
@@ -14,21 +14,13 @@ use argon2::{
 };
 use jsonwebtoken::{DecodingKey, EncodingKey, Header, Validation, decode, encode};
 use serde::{Deserialize, Serialize};
-use sqlx::FromRow;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// JWT token expiration time in seconds (7 days)
 const JWT_EXPIRATION_SECS: u64 = 7 * 24 * 60 * 60;
 
-/// User model stored in the database
-#[derive(Debug, Clone, FromRow, Serialize, Deserialize)]
-pub struct User {
-    pub id: i64,
-    pub email: String,
-    #[serde(skip_serializing)]
-    pub password_hash: String,
-    pub created_at: i64,
-}
+/// User model (re-export from turso for convenience)
+pub use turso::User;
 
 /// Public user info (without password hash)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -145,43 +137,16 @@ pub async fn register(email: &str, password: &str) -> Result<User> {
         anyhow::bail!("Password must be at least 8 characters long");
     }
 
-    let pool = db::get_pool()?;
-
     // Check if email already exists
-    let existing: Option<(i64,)> = sqlx::query_as("SELECT id FROM users WHERE email = ?")
-        .bind(email)
-        .fetch_optional(pool)
-        .await
-        .context("Database error")?;
-
-    if existing.is_some() {
+    if turso::get_user_by_email(email).await?.is_some() {
         anyhow::bail!("Email already registered");
     }
 
     // Hash password
     let password_hash = hash_password(password)?;
 
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .context("System time error")?
-        .as_secs() as i64;
-
-    // Insert user
-    let result =
-        sqlx::query("INSERT INTO users (email, password_hash, created_at) VALUES (?, ?, ?)")
-            .bind(email)
-            .bind(&password_hash)
-            .bind(now)
-            .execute(pool)
-            .await
-            .context("Failed to create user")?;
-
-    let user = User {
-        id: result.last_insert_rowid(),
-        email: email.to_string(),
-        password_hash,
-        created_at: now,
-    };
+    // Create user
+    let user = turso::create_user(email, &password_hash).await?;
 
     tracing::info!("New user registered: {}", email);
     Ok(user)
@@ -189,15 +154,9 @@ pub async fn register(email: &str, password: &str) -> Result<User> {
 
 /// Login a user and return a JWT token
 pub async fn login(email: &str, password: &str, jwt_secret: &str) -> Result<(User, String)> {
-    let pool = db::get_pool()?;
-
-    let user: Option<User> = sqlx::query_as("SELECT * FROM users WHERE email = ?")
-        .bind(email)
-        .fetch_optional(pool)
-        .await
-        .context("Database error")?;
-
-    let user = user.ok_or_else(|| anyhow::anyhow!("Invalid email or password"))?;
+    let user = turso::get_user_by_email(email)
+        .await?
+        .ok_or_else(|| anyhow::anyhow!("Invalid email or password"))?;
 
     // Verify password
     if !verify_password(password, &user.password_hash)? {
@@ -213,29 +172,26 @@ pub async fn login(email: &str, password: &str, jwt_secret: &str) -> Result<(Use
 
 /// Get user by ID
 pub async fn get_user_by_id(user_id: i64) -> Result<Option<User>> {
-    let pool = db::get_pool()?;
-
-    sqlx::query_as("SELECT * FROM users WHERE id = ?")
-        .bind(user_id)
-        .fetch_optional(pool)
-        .await
-        .context("Database error")
+    turso::get_user_by_id(user_id).await
 }
 
 /// Get user by email
 pub async fn get_user_by_email(email: &str) -> Result<Option<User>> {
-    let pool = db::get_pool()?;
-
-    sqlx::query_as("SELECT * FROM users WHERE email = ?")
-        .bind(email)
-        .fetch_optional(pool)
-        .await
-        .context("Database error")
+    turso::get_user_by_email(email).await
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn test_user() -> User {
+        User {
+            id: 1,
+            email: "test@example.com".to_string(),
+            password_hash: "fake_hash".to_string(),
+            created_at: 0,
+        }
+    }
 
     #[test]
     fn test_password_hashing() {
@@ -248,12 +204,7 @@ mod tests {
 
     #[test]
     fn test_jwt_generation_and_validation() {
-        let user = User {
-            id: 1,
-            email: "test@example.com".to_string(),
-            password_hash: "fake_hash".to_string(),
-            created_at: 0,
-        };
+        let user = test_user();
 
         let secret = "test_secret_key_123";
         let token = generate_token(&user, secret).unwrap();
@@ -265,12 +216,7 @@ mod tests {
 
     #[test]
     fn test_jwt_validation_fails_with_wrong_secret() {
-        let user = User {
-            id: 1,
-            email: "test@example.com".to_string(),
-            password_hash: "fake_hash".to_string(),
-            created_at: 0,
-        };
+        let user = test_user();
 
         let token = generate_token(&user, "secret1").unwrap();
         assert!(validate_token(&token, "secret2").is_err());
